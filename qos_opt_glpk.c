@@ -32,6 +32,9 @@ It is not easy to explain this piece of code. I will try to do it in the best po
 /** Maximum number of column variables in the GLPK formulation **/
 #define MAX_COL (MAX_N * MAX_M * MAX_R * MAX_P)
 
+#define LPX glp_prob
+#define GLP_E_OK 0
+
 typedef struct qos_opt_glpk {
   struct qos_opt_vtable *vtable;	/**< vtable */
 
@@ -248,7 +251,7 @@ static int get_pow_penalty(qos_opt *this, int res) {
 /** Find a good solution, not necessarily the optimum **/
 static int qos_opt_solve_lp(qos_opt_glpk *p_op,LPX *lp) {
   	int n,m,r,p,am,rm;//apl,eng,vble; //,pot,paso2,paso3,modo;
-	int ret = 0, lpx_rv, lpx_mip = -578;
+	int ret = 0, glp_rv, glp_mip = -578;
 
 	int *ind4;//,*ind2,*ind3,*ind4;
         int col,a,res;
@@ -292,8 +295,8 @@ static int qos_opt_solve_lp(qos_opt_glpk *p_op,LPX *lp) {
 	    ind4[j]=j+length*(i-(n*r+p*(p-1)*n*(n-1)/2*r+m*n*(r-1)+1));
 	    vale[j]=b[j+length*(i-(n*r+p*(p-1)*n*(n-1)/2*r+m*n*(r-1)+1))]; //  (i-r*(n+p)-m*n-1)];
 	  }
-	  lpx_set_mat_row(lp,i,length,ind4,vale);
-	  lpx_set_row_bnds(lp, i, LPX_UP, 0, 1);
+	  glp_set_mat_row(lp,i,length,ind4,vale);
+	  glp_set_row_bnds(lp, i, GLP_UP, 0, 1);
 	}
 
 	//The first approach is with all the applications at high quality maximum power.
@@ -322,26 +325,26 @@ static int qos_opt_solve_lp(qos_opt_glpk *p_op,LPX *lp) {
 	  }
 	}
        for (col=1;col<=cols;col++) {
-         lpx_set_obj_coef(lp,col,(double)cof[col]);
+         glp_set_obj_coef(lp,col,(double)cof[col]);
        }
-       lpx_set_int_parm(lp,LPX_K_MSGLEV,0);
+       //glp_set_int_parm(lp,LPX_K_MSGLEV,0);
 #ifdef DEBUG_QOS_OPT
-       lpx_print_prob(lp,"ejem_prob.txt");
+       //glp_print_lp(lp,"ejem_prob.txt");
 #endif
-       if ((lpx_rv = lpx_simplex(lp)) != LPX_E_OK)
+       if ((glp_rv = glp_simplex(lp, NULL)) != GLP_E_OK)
          goto err;
-       if ((lpx_rv = lpx_intopt(lp)) != LPX_E_OK)
+       if ((glp_rv = glp_intopt(lp, NULL)) != GLP_E_OK)
 	 goto err;
-       if ((lpx_mip = lpx_mip_status(lp)) != LPX_I_OPT)
+       if ((glp_mip = glp_mip_status(lp)) != GLP_OPT)
          goto err;
-       //if ((lpx_rv = lpx_simplex(lp)) != LPX_E_OK)
+       //if ((glp_rv = glp_simplex(lp, NULL)) != GLP_E_OK)
        //  goto err;
-       //if ((lpx_rv = lpx_integer(lp)) != LPX_E_OK)
+       //if ((glp_rv = glp_integer(lp)) != GLP_E_OK)
        //  goto err;
        ret = 1;
 #ifdef DEBUG_QOS_OPT
-       lpx_write_mps(lp,"ejem_mps.txt");
-       lpx_print_sol(lp, "ejem_sol.txt");
+       //glp_write_mps(lp,"ejem_mps.txt");
+       //glp_print_sol(lp, "ejem_sol.txt");
 #endif
 
        int q;
@@ -349,7 +352,7 @@ static int qos_opt_solve_lp(qos_opt_glpk *p_op,LPX *lp) {
          for (a = 0; a < n; ++a) {
            for (rm = 0; rm < p; ++rm) {
              for (am = 0; am < m; ++am) {
-               q = (int) lpx_mip_col_val(lp, col_idx(p_op, a, am, res, rm)); //verificar
+               q = (int) glp_mip_col_val(lp, col_idx(p_op, a, am, res, rm)); //verificar
                if (q == 1) {
                  p_op->appl_mode[a] = am; // stored app_mode is 0-based
                  p_op->res_pot[res] = rm; // stored res_mode is 0-based
@@ -360,24 +363,24 @@ static int qos_opt_solve_lp(qos_opt_glpk *p_op,LPX *lp) {
        }
        dbg_printf("End of optimization: ");
        err:
-       p_op->obj_value=lpx_mip_obj_val(lp);
-       switch (lpx_rv) {
-        case LPX_E_OK: dbg_printf("Simplex Success\n"); break;
-        case LPX_E_EMPTY: dbg_printf("Empty\n"); break;
-        case LPX_E_BADB: dbg_printf("Bad basis\n"); break;
-        case LPX_E_INFEAS: dbg_printf("Infeasible initial solution\n"); break;
-        case LPX_E_FAULT: dbg_printf("Fault\n"); break;
-        case LPX_E_NOFEAS: dbg_printf("No feasible solution exists\n"); break;
-        case LPX_E_INSTAB: dbg_printf("Numerically unstable\n"); break;
-        default: dbg_printf("Uncatalogued lpx_rv code\n"); break;
+       p_op->obj_value=glp_mip_obj_val(lp);
+       switch (glp_rv) {
+        case GLP_E_OK: dbg_printf("Simplex Success\n"); break;
+        /* case GLP_E_EMPTY: dbg_printf("Empty\n"); break; */
+        /* case GLP_E_BADB: dbg_printf("Bad basis\n"); break; */
+        /* case GLP_E_INFEAS: dbg_printf("Infeasible initial solution\n"); break; */
+        /* case GLP_E_FAULT: dbg_printf("Fault\n"); break; */
+        /* case GLP_E_NOFEAS: dbg_printf("No feasible solution exists\n"); break; */
+        /* case GLP_E_INSTAB: dbg_printf("Numerically unstable\n"); break; */
+        default: dbg_printf("Uncatalogued glp_rv code\n"); break;
        }
-       switch (lpx_mip) {
-       case LPX_I_UNDEF: dbg_printf("Undefined MIP solution\n"); break;
-       case LPX_I_OPT: dbg_printf("Optimum MIP solution found\n"); break;
-       case LPX_I_FEAS: dbg_printf("FEAS MIP\n"); break;
-       case LPX_I_NOFEAS: dbg_printf("NOFEAS MIP\n"); break;
-       case -578: dbg_printf("lpx_mip error code not set\n"); break;
-       default: dbg_printf("Uncatalogued lpx_mip code\n"); break;
+       switch (glp_mip) {
+       case GLP_UNDEF: dbg_printf("Undefined MIP solution\n"); break;
+       case GLP_OPT: dbg_printf("Optimum MIP solution found\n"); break;
+       case GLP_FEAS: dbg_printf("FEAS MIP\n"); break;
+       case GLP_NOFEAS: dbg_printf("NOFEAS MIP\n"); break;
+       case -578: dbg_printf("glp_mip error code not set\n"); break;
+       default: dbg_printf("Uncatalogued glp_mip code\n"); break;
        }
        free(cof);
        free(b);
@@ -441,14 +444,14 @@ static LPX *qos_opt_problem(qos_opt_glpk *p_op) {
         //Matrix vincoli
 //	int w;
 
-	lp = lpx_create_prob(); //this function creates the problem in glpk
-        lpx_set_class(lp,LPX_MIP); //the kind of problem to be solved, in this case integer.
-        lpx_set_prob_name(lp, "Maxi_Profit"); //name of the problem
-        lpx_set_obj_dir(lp, LPX_MAX); //we are trying to maximize the profit.
+	lp = glp_create_prob(); //this function creates the problem in glpk
+        //glp_set_class(lp,GLP_MIP); //the kind of problem to be solved, in this case integer.
+        glp_set_prob_name(lp, "Maxi_Profit"); //name of the problem
+        glp_set_obj_dir(lp, GLP_MAX); //we are trying to maximize the profit.
 
         //cols is the number of binary variables in the system. Each tuple
         //(application, mode,power, resource) represents a variable.
-        lpx_add_cols(lp, cols);
+        glp_add_cols(lp, cols);
 	//This for cycle construct the columns under glpk. It can be avoided on run time once
 	//the problem is defined.
         for (res = 0; res < r; ++res) {
@@ -457,9 +460,9 @@ static LPX *qos_opt_problem(qos_opt_glpk *p_op) {
               for (am = 0; am < m; ++am) {
                 int idx = col_idx(p_op, a, am, res, rm);
 		sprintf(str, "x%dr%da%drm%dam%d", idx, res, a, rm, am);
-		lpx_set_col_name(lp, idx, str);
-                lpx_set_col_bnds(lp, idx, LPX_DB,0.0,1.0);
-                lpx_set_col_kind(lp, idx, LPX_IV);
+		glp_set_col_name(lp, idx, str);
+                glp_set_col_bnds(lp, idx, GLP_DB,0.0,1.0);
+                glp_set_col_kind(lp, idx, GLP_IV);
               }
             }
           }
@@ -467,10 +470,10 @@ static LPX *qos_opt_problem(qos_opt_glpk *p_op) {
 
    //Vincoli definition. Like in the case of columns this has to be created only once
 
-        lpx_add_rows(lp, rows);
+        glp_add_rows(lp, rows);
         for (i=1; i <= rows; i++) {
           sprintf(str, "v%d", i);
-          lpx_set_row_name(lp, i, str);
+          glp_set_row_name(lp, i, str);
         }
 
       //Constraints definition.
@@ -487,8 +490,8 @@ static LPX *qos_opt_problem(qos_opt_glpk *p_op) {
 			ind1[j]=j+vinc*(i-1)+n*m*p*(g-1);
 			val1[j]=1.0;
 		}
-	        lpx_set_mat_row(lp,(i+paso),vinc,ind1,val1);
-        	lpx_set_row_bnds(lp, (i+paso), LPX_FX, 1, 1);
+	        glp_set_mat_row(lp,(i+paso),vinc,ind1,val1);
+        	glp_set_row_bnds(lp, (i+paso), GLP_FX, 1, 1);
 	}
 	paso+=n;
       }
@@ -512,8 +515,8 @@ static LPX *qos_opt_problem(qos_opt_glpk *p_op) {
                           +(rm-eng)*m)+recurso*(res-1);
                       val2[j+m*paso]=1;
                     }
-                  lpx_set_mat_row(lp, i, length, ind2, val2);
-                  lpx_set_row_bnds(lp, i, LPX_UP, 1, 1);
+                  glp_set_mat_row(lp, i, length, ind2, val2);
+                  glp_set_row_bnds(lp, i, GLP_UP, 1, 1);
                   i++;
                 }
               }
@@ -549,8 +552,8 @@ static LPX *qos_opt_problem(qos_opt_glpk *p_op) {
 			 }
 	      	      }
 	   	   }
-	        lpx_set_mat_row(lp,i,length,ind3,val3);
-        	lpx_set_row_bnds(lp,i, LPX_UP, 1,1);
+	        glp_set_mat_row(lp,i,length,ind3,val3);
+        	glp_set_row_bnds(lp,i, GLP_UP, 1,1);
                 i++; 
 	    }			 
         }
@@ -568,8 +571,8 @@ static LPX *qos_opt_problem(qos_opt_glpk *p_op) {
       		ind4[j]=j+length*(i-(n*r+p*(p-1)*n*(n-1)/2*r+m*n*(r-1)+1));
 		vale[j]=b[j+length*(i-(n*r+p*(p-1)*n*(n-1)/2*r+m*n*(r-1)+1))]; //  (i-r*(n+p)-m*n-1)];
 	     }
-	     lpx_set_mat_row(lp,i,length,ind4,vale);
-      	     lpx_set_row_bnds(lp, i, LPX_UP, 0, 1);
+	     glp_set_mat_row(lp,i,length,ind4,vale);
+      	     glp_set_row_bnds(lp, i, GLP_UP, 0, 1);
       }
       free(ind1);
       free(ind2);
@@ -622,7 +625,7 @@ static double get_obj_value(qos_opt *this) {
 /** Set iteration limit if supported by implementation */
 static int set_it_limit(qos_opt *this, unsigned long it_limit) {
   qos_opt_glpk *p_op = (qos_opt_glpk *) this;
-  lpx_set_int_parm(p_op->lp, LPX_K_ITLIM, it_limit);
+  glp_set_it_cnt(p_op->lp, it_limit);
   return 0;
 }
 
