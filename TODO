@@ -1,0 +1,11 @@
+- Add -tt option for time-triggered activities in pipeline
+  (as opposed to push-triggered).
+- Cleanup unused code in Controller and derivate classes
+x Return b_k in XX::calcBandwidth(), instead of u_k
+
+x Rename from Scheduler to Controller
+x Check situation evolves badly after a while and b_k goes down
+x Check negative c_k i.e. time goes backward in task0.dat
+
+x Check -T option: catched in multiple places ==> if given too early,
+  simulation does not work.

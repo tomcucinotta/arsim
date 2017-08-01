@@ -1,0 +1,259 @@
+<h1>Adaptive Reservation Simulator (ARSim)</h1>
+
+
+
+<h2>Description</h2>
+
+<p>
+<tt>ARSim</tt> emulates multiple reservation-based schedulers, where each job
+of each task, with unpredictable duration, is dynamically assigned a
+bandwidth controlled by a QoS module. In the second release of the
+emulator, it is possible to instantiate more tasks, each one
+controlled by its own controller, and the statistics are collected on
+a temporal-average basis, rather than on the job-end event-based
+fashion used in the first release.
+
+<p>
+Supports various kind of QoS controllers (which have been properly
+renamed to Controllers w.r.t. to the previous release), task types and
+task predictor. Also, there is a single GlobalController which
+enforces the global saturation constraint by means of a simple
+recompression policy, but other global controllers may be added, by
+subclassing the GlobalController class.
+
+<p>
+A QoS Controller is a module that decides, each time a job finishes,
+what bandwidth must be allocated for the next job execution. Decision
+is made differently by various controller types. Some of them rely on
+the prediction of the next execution time (mean value, standard
+deviation, interval in which sample will fall with high prob), that is
+performed by a TaskPredictor module. Task behaviour is emulated by a
+Task module, that generates job execution times.  QoS Controller, Task
+and Task Predictor types can be changed, and parameters can be fed to
+them, by using proper command line options.
+
+<p>
+The program executable is <tt>arsim</tt>, and it is able to simulate the
+asynchronous execution of multiple tasks running on multiple resources.
+Each new resource but the first one is introduced by a '-r' option.
+Tasks have unique zero-based IDs within the resource they consume. Resources
+have zero-based IDs as well. During an execution run, the program produces
+various files (? is a pair of comma separated numbers identifying a task
+by means of its own task ID and resource ID):
+
+<ul>
+  <li> <bf>task?.dat</bf>: a table for each task suitable for feeding gnuplot
+    <tt>plot</tt> command. Common output columns are: time, instantaneous
+    budget, number of enqueued jobs, required and assigned bandwidth,
+    last scheduling error measurement.
+
+  <li> <bf>rbw_stat?.dat</bf>: the required bandwidth PDF for each task
+
+  <li> <bf>bw_stat?.dat</bf>: the assigned bandwidth PDF for each task
+</ul>
+
+<p>
+More specifically, apart from what is randomly written on stdout, the
+program creates a huge number of "*_stat*,*.dat" files within the
+current folder. This is the main result of the simulation (all files
+have a suffix of the type <task-ID>,<resource-ID>.dat).
+
+<p>
+The <tt>task*.dat</tt> files contain the temporal evolution of the simulation,
+ with such columns as:<ul>
+ <li> time: current simulation time
+ <li> T: task period (always the same)
+ <li> N_k: number of enqueued jobs
+ <li> c_k: residual budget for the currently executing job (starts from the
+   job computation time requirement, and goes down to zero)
+ <li> b_k: currently assigned bandwidth (as from the supervisor)
+ <li> rb_k: currently required bandwidth (as from the task controller)
+ <li> e_k: last measured scheduling error (absolute value, i.e. same
+   measurement unit as the task period (T) or execution time (c_k)
+   columns)
+ <li> pl_n, pl_p: pipeline structure: list of tasks that depend on this (pl_n),
+   or that this depends on (pl_p), in the form <task-ID>,<resource-ID>
+   (this info is always the same in the file)
+</ul>
+
+<p>
+The <tt>*_stats*.dat</tt> files contain various statistics on the simulation.
+ Each file has a one-line quick description of the statistic, plus a few
+ summary statistics (mean, standard deviation, min, max and mean
+ of non-zero samples) in the first commented 3 lines. The files are as follows:
+<ul>
+ <li> bw_stats: PDF of the "bw" column
+ <li> rbw_stats: PDF of the "rbw" column
+ <li> ck_stats: PDF of the execution time (does not correspond to the PDF
+   of the c_k column, because the latter also represents residual budget
+   as it evolves in time).
+ <li> se_stats: PDF of the scheduling error values, collected at the end of
+   each job (does not correspond to the distribution of the e_k column);
+   the collected values are also output in "se<task-ID>,<resource-ID>.dat"
+   files
+ <li> pred: time evolution of the predicted value (m_k column) and range(s)
+   (h_k, H_k and hi_k, Hi_k) as output, respectively, by the value and
+   range predictors
+ <li> rw_stats: PDF of prediction range width (represents the accuracy of
+   the range predictor)
+ <li> pr_stats: PMF of the range prediction being correct (value 1), or not (0).
+ <li> ra_stats: PDF of the predicted range "alpha" value (h_k / H_k ratio)
+</ul>
+
+<p>
+Moreover, there are some invariant-specific stats:
+<ul>
+ <li> pi_stats: PMF (Mass Function) of the scheduling error staying into the
+   invariant (value 1), or not (value 0).
+ <li> pii_stats: same for the internal invariant, if has been used
+ <li> ri_stats: PMF of the number of steps required for the scheduling error
+   to return back into the invariant once exited it.
+</ul>
+
+<p>
+Please, note that in the stats files values are all normalized to the task
+period (T column), so "1.0" represents actually the value "T" (e.g. 40 msec
+for the usual MPEG samples we use).
+
+<p>
+You can easily plot the represented data with GNUplot scripts. 
+
+
+<h2>Requirements</h2>
+
+<ul>
+  <li> Octave library (liboctave), for class 'TPOptimumLinearFIR'.
+  <li> GNU GLPK Toolkit, for class 'GlobalController'.
+</ul>
+
+<h2>Compile</h2>
+
+<p>
+Just type 'make'.
+
+
+<h2>Use</h2>
+
+<tt>./arsim [options]</tt>
+
+Note:
+<ul>
+  <li> <tt>arsim</tt> specific options must follow scheduler specification
+  <li> Task specific options must follow task specification
+  <li> Mostly useful options may be customized through command line options
+  and arguments. Though, defaults.h contains the default values for
+  many of these options whenever they are not specified on the command line.
+</ul>
+
+<p>
+List of supported options:
+<tt>./<tt>arsim</tt> [-h|--help]</tt>
+
+<p>
+Each '-s' option adds a QoS controller, which must be assigned a task
+type with a subsequent '-t' option, and may be assigned a task
+predictor with the '-tp' option. All subsequent options, up to the
+next '-s' option, feed parameters to the just added controller, task
+type, or task predictor. All of the introduced tasks and controllers
+refer to the same resource, unless a '-r' option is used, which
+introduced the definition of a new resource, so that all of the
+subsequent controller and task definitions refer to the new created
+resource. Dependencies among tasks may be specified through the '-pa'
+(Pipe After) and '-pb' (Pipe Before) options within a task definition,
+which take as argument a pair of comma separated IDs identifying a
+specific task into a specific resource (taskID,resourceID).
+
+
+<h2>Example</h2>
+
+<tt>
+./<tt>arsim</tt> -N 1000 \
+  -s sdb -t u -T 100 -c 60 -C 70 -B 0.9 \
+  -s sdb -t u -T 50 -c 10 -C 20 -B 1
+</tt>
+
+<p>
+Launchs a simulation that lasts for 1000 scheduling events, with a SDB
+controller attached to a uniformly distributed task in the range
+[60,70] with period 100, with maximum bandwidth 0.9, and a second SDB
+controller attached to a uniformly distributed task in the range
+[10,20] with period 50, with maximum bandwidth 1.
+
+
+<h2>Task types</h2>
+
+<ul>
+  <li> -t 'u'	Uniform random distribution in [c_min, c_max]
+  <li> -t 's'	Random values maintained constant for random periods
+  <li> -t 't'	Triangular
+  <li> -t 'p'	Uniform distribution in internal range with spikes in full range
+  <li> -t 'tp'	Triangular moving mean with uniform distribution around the mean
+	and spikes in full c(k) excursion range
+  <li> -t 'tr'	Trace based task. Uses samples coming from an input file
+</ul>
+
+
+<h2>Task predictor types</h2>
+
+<ul>
+  <li> -tp 'sp'	Static Parameter (all values configured statically through cmd-line options)
+  <li> -tp 'mm'	Moving Mean
+  <li> -tp 'mmm'	Multiple Moving Mean (useful for periodic load patterns)
+  <li> -tp 'fir'	FIR filter (weighted moving mean)
+</ul>
+
+
+<h2>Controller types</h2>
+
+<p>
+Invariant Based
+<ul>
+  <li> -s 'ls'   Limited Symmetric: constraints e(k) within a symmetric region
+	  (params: -E)
+  <li> -s 'la'	  Limited Asymmetric: constraints e(k) within an asymmetric region
+	  (params: -e, -E)
+  <li> -s 'lar'  Limited Asymmetric Relaxed: as 'la', but does not make the
+	  admission test
+  <li> -s 'lak'  Limited Asymmetric Adaptive: as 'la', but adapts invariant step
+	  by step
+  <li> -s 're'	  Reduced exponentially e(k) with a constant factor
+	  (params: -g)
+  <li> -s 'ey'	  Constrain both e(k) and y(k)=u(k)-T/c(k) within interval
+	  (params: -y, -Y)
+  <li> -s 'dl'   Double Asymmetric Invariant with greedy recovery from spikes
+</ul>
+
+<p>
+Stochastic Based
+<ul>
+  <li> -s 'sdb'  Stochastic Dead Beat (SDB): seeks a null expected e(k+1)
+  <li> -s 'msse' Minimum Square Scheduling Error (MSSE): seeks the minimum of
+	  the expectation of e(k+1)^2
+  <li> -s 'oc'   Optimal Cost: optimizes E[g*e(k+1)^2 + (1-g)*b]
+</ul>
+
+
+<h2>License</h2>
+
+<p>
+<tt>ARSim</tt><br>
+Copyright (c) 2000-2017 Tommaso Cucinotta<br>
+
+<p>
+This file is part of <tt>ARSim</tt>.
+
+<p>
+<tt>ARSim</tt> is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version.
+
+<p>
+<tt>ARSim</tt> is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+<p>
+You should have received a copy of the GNU General Public
+License along with <tt>ARSim</tt>. If not, see http://www.gnu.org/licenses
